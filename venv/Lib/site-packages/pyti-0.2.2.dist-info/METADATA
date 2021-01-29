@@ -1,0 +1,22 @@
+Metadata-Version: 2.0
+Name: pyti
+Version: 0.2.2
+Summary: Technical Indicator Library
+Home-page: https://github.com/kylejusticemagnuson/pyti
+Author: Kyle Justice Magnuson
+Author-email: kyle@topsteptrader.com
+License: MIT
+Keywords: financial technical indicator functions
+Platform: UNKNOWN
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Topic :: Software Development
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 2.7
+Classifier: Programming Language :: Python :: 3.6
+Requires-Dist: numpy
+Requires-Dist: pandas
+
+This library contains various financial technical indicators that can be used to analyze financial data.
+
+
