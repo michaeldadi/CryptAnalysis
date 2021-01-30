@@ -1,20 +1,19 @@
 import plotly.graph_objs as go
 from plotly.offline import plot
-
-from pyti.smoothed_moving_average import smoothed_moving_average as sma
 from pyti.bollinger_bands import lower_bollinger_band as lbb
+from pyti.smoothed_moving_average import smoothed_moving_average as sma
 
 from Binance import Binance
 
 
 class TradingModel:
 
-    def __init__(self, symbol):
+    def __init__(self, symbol, timeframe='4h'):
         self.symbol = symbol
+        self.timeframe = timeframe
         self.exchange = Binance()
-        self.df = self.exchange.GetSymbolData(symbol, '4h')
+        self.df = self.exchange.GetSymbolData(symbol, timeframe)
         self.last_price = self.df['close'][len(self.df['close']) - 1]
-        self.buy_signals = []
 
         try:
             self.df['fast_sma'] = sma(self.df['close'].tolist(), 10)
@@ -25,18 +24,7 @@ class TradingModel:
             print(e)
             return None
 
-    def strategy(self):
-        df = self.df
-        buy_signals = []
-        # If price is 3% below SMA, buy
-        # If price is 2% above buying price, sell
-        for i in range(1, len(df['close'])):
-            if df['slow_sma'][i] > df['low'][i] and (df['slow_sma'][i] - df['low'][i]) > 0.03 * df['low'][i]:
-                buy_signals.append([df['time'][i], df['low'][i]])
-
-        self.plotData(buy_signals=buy_signals)
-
-    def plotData(self, buy_signals=False):
+    def plotData(self, buy_signals=False, sell_signals=False, plot_title="", indicators=[]):
         df = self.df
         # Plot candlestick chart
         candle = go.Candlestick(
@@ -46,27 +34,31 @@ class TradingModel:
             high=df['high'],
             low=df['low'],
             name="Candlesticks")
-
+        data = [candle]
         # Plot MAs
-        fsma = go.Scatter(
-            x=df['time'],
-            y=df['fast_sma'],
-            name="Fast SMA",
-            line=dict(color='rgba(102, 207, 255, 50)'))
+        if indicators.__contains__('fast_sma'):
+            fsma = go.Scatter(
+                x=df['time'],
+                y=df['fast_sma'],
+                name="Fast SMA",
+                line=dict(color='rgba(102, 207, 255, 50)'))
+            data.append(fsma)
 
-        ssma = go.Scatter(
-            x=df['time'],
-            y=df['slow_sma'],
-            name="Slow SMA",
-            line=dict(color='rgba(255, 207, 102, 50)'))
+        if indicators.__contains__('slow_sma'):
+            ssma = go.Scatter(
+                x=df['time'],
+                y=df['slow_sma'],
+                name="Slow SMA",
+                line=dict(color='rgba(255, 207, 102, 50)'))
+            data.append(ssma)
 
-        lowbb = go.Scatter(
-            x=df['time'],
-            y=df['low_boll'],
-            name="Lower Bollinger Band",
-            line=dict(color='rgba(255, 102, 207, 50)'))
-
-        data = [candle, ssma, fsma, lowbb]
+        if indicators.__contains__('low_boll'):
+            lowbb = go.Scatter(
+                x=df['time'],
+                y=df['low_boll'],
+                name="Lower Bollinger Band",
+                line=dict(color='rgba(255, 102, 207, 50)'))
+            data.append(lowbb)
 
         if buy_signals:
             buys = go.Scatter(
@@ -74,61 +66,18 @@ class TradingModel:
                 y=[item[1] for item in buy_signals],
                 name="Buy Signals",
                 mode="markers")
+            data.append(buys)
 
+        if sell_signals:
             sells = go.Scatter(
-                x=[item[0] for item in buy_signals],
-                y=[item[1] * 1.05 for item in buy_signals],
+                x=[item[0] for item in sell_signals],
+                y=[item[1] for item in sell_signals],
                 name="Sell Signals",
                 mode="markers")
-
-            data = [candle, ssma, fsma, buys, sells]
+            data.append(sells)
 
         # Style and UI
-        layout = go.Layout(title=self.symbol)
+        layout = go.Layout(title=plot_title)
         fig = go.Figure(data=data, layout=layout)
 
-        plot(fig, filename=self.symbol + '.html')
-
-    def maStrategy(self, i):
-        # Return true if price is 10% below SMA
-        df = self.df
-        buy_price = 0.8 * df['slow_sma'][i]
-        if buy_price >= df['close'][i]:
-            self.buy_signals.append([df['time'][i], df['close'][i], df['close'][i] * 1.045])
-            return True
-
-        return False
-
-    def bollStrategy(self, i):
-        # Return true if price is 5% below LBB
-        df = self.df
-        buy_price = 0.98 * df['low_boll'][i]
-        if buy_price >= df['close'][i]:
-            self.buy_signals.append([df['time'][i], df['close'][i], df['close'][i] * 1.045])
-            return True
-
-        return False
-
-
-def Main():
-    exchange = Binance()
-    symbols = exchange.GetTradingSymbols()
-    for symbol in symbols:
-        print(symbol)
-        model = TradingModel(symbol)
-        plot = False
-
-        if model.maStrategy(len(model.df['close']) - 1):
-            print("MA Strategy match on " + symbol)
-            plot = True
-
-        if model.bollStrategy(len(model.df['close']) - 1):
-            print("Boll Strategy match on " + symbol)
-            plot = True
-
-        if plot:
-            model.plotData()
-
-
-if __name__ == '__main__':
-    Main()
+        plot(fig, filename='graphs/' + plot_title + '.html')

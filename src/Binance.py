@@ -1,10 +1,11 @@
-import hashlib
-import requests
-import json
 import decimal
+import hashlib
 import hmac
+import json
 import time
+
 import pandas as pd
+import requests
 
 import config
 
@@ -26,7 +27,9 @@ class Binance:
             "exchangeInfo": '/api/v3/exchangeInfo'
         }
 
-    def GetTradingSymbols(self):
+        self.headers = {"X-MBX-APIKEY": binance_keys['api_key']}
+
+    def GetTradingSymbols(self, quoteAssets=None):
         # Get all tradable symbols
         url = self.base + self.endpoints["exchangeInfo"]
 
@@ -42,7 +45,8 @@ class Binance:
 
         for pair in data['symbols']:
             if pair['status'] == 'TRADING':
-                symbols_list.append(pair['symbol'])
+                if quoteAssets is not None and pair['quoteAsset'] in quoteAssets:
+                    symbols_list.append(pair['symbol'])
 
         return symbols_list
 
@@ -68,9 +72,11 @@ class Binance:
         for col in col_names:
             df[col] = df[col].astype(float)
 
+        df['date'] = pd.to_datetime(df['time'] * 1000000, infer_datetime_format=True)
+
         return df
 
-    def PlaceOrder(self, symbol, side, type, quantity, price, test:bool=True):
+    def PlaceOrder(self, symbol, side, type, quantity, price, test=True):
         params = {
             'symbol': symbol,
             'side': side,
@@ -82,6 +88,10 @@ class Binance:
             'timestamp': int(round(time.time() * 1000))
         }
 
+        if type != 'MARKET':
+            params['timeInForce'] = 'GTC'
+            params['price'] = self.floatToString(price)
+
         self.signRequest(params)
 
         url = ''
@@ -91,14 +101,14 @@ class Binance:
             url = self.base + self.endpoints['order']
 
         try:
-            response = requests.post(url, params=params, headers={"X-MBX-APIKEY": binance_keys['api_key']})
+            response = requests.post(url, params=params, headers=self.headers)
+            data = response.text
         except Exception as e:
             print("Exception occurred attempting to place order on " + url)
             print(e)
-            response = {'code': '-1', 'msg': e}
-            return None
+            data = {'code': '-1', 'msg': e}
 
-        return json.loads(response.text)
+        return json.loads(data)
 
     def CancelOrder(self, symbol, orderId):
         params = {
@@ -113,12 +123,14 @@ class Binance:
         url = self.base + self.endpoints['order']
 
         try:
-            response = requests.delete(url, params=params, headers={"X-MBX-APIKEY": binance_keys['api_key']})
+            response = requests.delete(url, params=params, headers=self.headers)
+            data = response.text
         except Exception as e:
             print("Exception occurred attempting to cancel order on " + url)
             print(e)
-            response = {'code': '-1', 'msg': e}
-            return None
+            data = {'code': '-1', 'msg': e}
+
+        return json.loads(data)
 
     def GetOrderInfo(self, symbol, orderId):
         params = {
@@ -133,14 +145,14 @@ class Binance:
         url = self.base + self.endpoints['order']
 
         try:
-            response = requests.get(url, params=params, headers={"X-MBX-APIKEY": binance_keys['api_key']})
+            response = requests.get(url, params=params, headers=self.headers)
+            data = response.text
         except Exception as e:
             print("Exception occurred attempting to get order info on " + url)
             print(e)
-            response = {'code': '-1', 'msg': e}
-            return None
+            data = {'code': '-1', 'msg': e}
 
-        return json.loads(response.text)
+        return json.loads(data)
 
     def GetAllOrderInfo(self, symbol):
         params = {
@@ -153,14 +165,14 @@ class Binance:
         url = self.base + self.endpoints['allOrders']
 
         try:
-            response = requests.get(url, params=params, headers={"X-MBX-APIKEY": binance_keys['api_key']})
+            response = requests.get(url, params=params, headers=self.headers)
+            data = response.text
         except Exception as e:
             print("Exception occurred attempting to get info on all orders on " + url)
             print(e)
-            response = {'code': '-1', 'msg': e}
-            return None
+            data = {'code': '-1', 'msg': e}
 
-        return json.loads(response.text)
+        return json.loads(data)
 
     def floatToString(self, f):
         context = decimal.Context()
